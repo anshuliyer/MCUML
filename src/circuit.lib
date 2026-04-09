@@ -1,0 +1,11 @@
+.title RC Circuit Transient
+
+.tran 1u 5m uic
+.control
+run
+wrdata results.txt v(out) v(input)
+quit
+.endcontrol
+Vinput input 0 PULSE(0 1 1u 1u 1u 10m 20m)
+R1 input out 1kOhm
+C1 out 0 1uF

@@ -1,0 +1,1 @@
+"""Legacy src package."""

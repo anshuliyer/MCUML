@@ -1,0 +1,10 @@
+.title NodeFlow
+.tran 10m 10m uic
+.control
+run
+wrdata node_flow.txt v(out) i(1)
+quit
+.endcontrol
+Vinput input 0 PULSE(0 1 1u 1u 1u 10m 20m)
+R1 input out 1000.0
+C1 out 0 1e-06

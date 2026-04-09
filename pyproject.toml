@@ -1,0 +1,19 @@
+[project]
+name = "MixedSignalIDE"
+version = "0.1.0"
+description = "A mixed signal IDE built on top of PySpice and ngspice."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "PySpice",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/anshuliyer/MixedSignalIDE"
+"Source" = "https://github.com/anshuliyer/MixedSignalIDE"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
