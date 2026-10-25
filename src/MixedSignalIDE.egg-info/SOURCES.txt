@@ -1,8 +1,0 @@
-README.md
-pyproject.toml
-src/__init__.py
-src/MixedSignalIDE.egg-info/PKG-INFO
-src/MixedSignalIDE.egg-info/SOURCES.txt
-src/MixedSignalIDE.egg-info/dependency_links.txt
-src/MixedSignalIDE.egg-info/requires.txt
-src/MixedSignalIDE.egg-info/top_level.txt
