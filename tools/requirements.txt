@@ -1,0 +1,12 @@
+# Python dependencies for MCUML tools and simulation
+# Install via: pip install -r requirements.txt
+
+pexpect>=4.9.0
+pyserial>=3.5
+qemu.qmp>=0.0.3
+
+pyelftools>=0.30
+
+pytest>=7.4.0
+
+numpy>=1.24.0
