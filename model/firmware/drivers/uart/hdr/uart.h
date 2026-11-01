@@ -2,16 +2,19 @@
 #include <stdint.h>
 
 #ifdef POSTSIL
-#define UART0_BASE (0x40009000)
+#define UART0_BASE (0x40034000)
 
-typedef struct __attribute__((packed)) {
-  uint32_t UARTDR;
-  uint16_t allign[9];
-  uint32_t UARTFR;
-  uint32_t reserv[3];
-  uint32_t UARTILPR;
-  uint32_t UARTIBRD;
-  uint32_t UARTRD;
+typedef struct {
+  volatile uint32_t UARTDR;        /* 0x00: Data Register */
+  volatile uint32_t UARTRSR;       /* 0x04: Receive Status Register / Error Clear */
+  volatile uint32_t _reserved0[4]; /* 0x08 - 0x14 */
+  volatile uint32_t UARTFR;        /* 0x18: Flag Register (bit 5: TXFF) */
+  volatile uint32_t _reserved1;    /* 0x1C */
+  volatile uint32_t UARTILPR;      /* 0x20: IrDA Low-power Counter */
+  volatile uint32_t UARTIBRD;      /* 0x24: Integer Baud Rate */
+  volatile uint32_t UARTFBRD;      /* 0x28: Fractional Baud Rate */
+  volatile uint32_t UARTLCR_H;     /* 0x2C: Line Control */
+  volatile uint32_t UARTCR;        /* 0x30: Control Register */
 } MCU_UART;
 
 #define UART0 ((volatile MCU_UART *)UART0_BASE)

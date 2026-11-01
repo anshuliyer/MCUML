@@ -17,7 +17,7 @@ PICOTOOL ?= picotool
 # Auto-detect default binaries
 TARGET ?= firmware
 DEFAULT_PRESIL_ELF := $(firstword $(wildcard $(BUILD_DIR)/presil/*.elf) $(ROOT_DIR)/tools/test_binary/firmware.elf)
-DEFAULT_POSTSIL_UF2 := $(firstword $(wildcard $(BUILD_DIR)/postsil/*.uf2) $(BUILD_DIR)/postsil/$(TARGET).uf2)
+DEFAULT_POSTSIL_UF2 := $(firstword $(wildcard $(BUILD_DIR)/postsil/*.uf2) $(ROOT_DIR)/model/firmware/drivers/usb/test_usb.uf2 $(BUILD_DIR)/postsil/$(TARGET).uf2)
 
 KERNEL   ?= $(DEFAULT_PRESIL_ELF)
 UF2      ?= $(DEFAULT_POSTSIL_UF2)
@@ -28,7 +28,7 @@ SIM_ARGS ?=
 PORT ?= $(firstword $(wildcard /dev/ttyACM*) $(wildcard /dev/ttyUSB*) $(wildcard /dev/serial0) $(wildcard /dev/cu.usbmodem*) /dev/ttyACM0)
 BAUD ?= 115200
 
-.PHONY: all presil postsil run-presil run-postsil monitor help
+.PHONY: all presil postsil run-presil run-postsil usb run-usb monitor help
 
 all: presil
 
@@ -70,7 +70,31 @@ run-postsil:
 	@echo ""
 	@if which $(PICOTOOL) >/dev/null 2>&1; then \
 		echo "Flashing via picotool..."; \
-		$(PICOTOOL) load -x -f "$(UF2)" || [ $$? -eq 157 ]; \
+		if ! $(PICOTOOL) load -x -f "$(UF2)" 2>/tmp/picotool_err.log; then \
+			status=$$?; \
+			if [ $$status -eq 157 ]; then \
+				:; \
+			else \
+				cat /tmp/picotool_err.log 2>/dev/null; \
+				echo ""; \
+				echo "============================================================"; \
+				echo " [!] Pico Not Detected in BOOTSEL Mode"; \
+				echo "============================================================"; \
+				echo "If the currently running firmware halted or disabled USB,"; \
+				echo "picotool cannot reboot the device automatically."; \
+				echo ""; \
+				echo "To flash:"; \
+				echo "  1. Unplug the USB cable from the Pico."; \
+				echo "  2. Hold down the white BOOTSEL button on the Pico."; \
+				echo "  3. Plug the USB cable back in."; \
+				echo "  4. Release the BOOTSEL button."; \
+				echo "  5. Re-run: make run-usb"; \
+				echo "============================================================"; \
+				rm -f /tmp/picotool_err.log; \
+				exit 1; \
+			fi; \
+		fi; \
+		rm -f /tmp/picotool_err.log; \
 	elif [ -d "/Volumes/RPI-RP2" ]; then \
 		echo "Copying to /Volumes/RPI-RP2..."; \
 		cp "$(UF2)" /Volumes/RPI-RP2/; \
@@ -85,6 +109,13 @@ run-postsil:
 	fi
 	@echo ""
 	@echo "[SUCCESS] Post-Silicon binary loaded successfully."
+
+# ==============================================================================
+# Post-Silicon USB CDC Target (Flash test_usb.uf2 with live CDC & LED)
+# ==============================================================================
+usb: run-usb
+run-usb:
+	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) postsil UF2=$(ROOT_DIR)/model/firmware/drivers/usb/test_usb.uf2
 
 # ==============================================================================
 # Monitor Serial Console

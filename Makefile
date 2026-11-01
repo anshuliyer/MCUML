@@ -3,7 +3,7 @@
 # Forwards commands to makefiles/build and makefiles/run.
 # ==============================================================================
 
-.PHONY: all deps presil postsil run-presil run-postsil monitor clean help
+.PHONY: all deps presil postsil run-presil run-postsil run-usb monitor clean help
 
 all: presil postsil
 
@@ -22,6 +22,9 @@ run-presil:
 
 run-postsil:
 	$(MAKE) -f makefiles/run postsil $(MAKEOVERRIDES)
+
+run-usb:
+	$(MAKE) -f makefiles/run run-usb $(MAKEOVERRIDES)
 
 monitor:
 	$(MAKE) -f makefiles/run monitor $(MAKEOVERRIDES)
