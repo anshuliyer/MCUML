@@ -11,3 +11,4 @@ typedef struct {
 } uint24_t;
 
 int delay(int time);
+int watchdog_init();

@@ -6,7 +6,6 @@ int watchdog_init(void) {
 }
 
 int delay(int time) {
-  watchdog_init();
   *SYST_CSR = 0;
   *SYST_RVR = time & 0x00FFFFFF;
   *SYST_CVR = 0;
