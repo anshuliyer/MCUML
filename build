@@ -97,6 +97,17 @@ while [[ $# -gt 0 ]]; do
             echo "Done."
             exit 0
             ;;
+        bootloader|bl1)
+            echo "Building bootloader (Pico SDK + TinyUSB)..."
+            mkdir -p "${SCRIPT_DIR}/model/firmware/bootloader/build"
+            cmake -B "${SCRIPT_DIR}/model/firmware/bootloader/build" -S "${SCRIPT_DIR}/model/firmware/bootloader"
+            cmake --build "${SCRIPT_DIR}/model/firmware/bootloader/build"
+            mkdir -p "$out_dir"
+            cp -f "${SCRIPT_DIR}/model/firmware/bootloader/build/bl1.uf2" "$out_dir/bl1.uf2"
+            echo ""
+            echo "Generated: $out_dir/bl1.uf2 (Pico Flashable)"
+            exit 0
+            ;;
         -h|--help|help)
             show_help
             exit 0

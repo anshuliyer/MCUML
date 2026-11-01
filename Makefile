@@ -22,7 +22,9 @@ build:
 	         $(if $(L),-l $(L),$(if $(l),-l $(l),)) \
 	         $(if $(O),-o $(O),$(if $(o),-o $(o),)) \
 	         $(if $(M),-m $(M),$(if $(m),-m $(m),))
-
+# Build bootloader (bl1)
+bootloader:
+	@./build bootloader
 # Run in QEMU (Cortex-M)
 run-qemu:
 	@./run qemu $(if $(BIN),$(BIN),$(if $(b),$(b),))
