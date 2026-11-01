@@ -16,7 +16,7 @@ int main() {
   *SIO_GPIO_OE_SET = (1 << 25);
   while (1) {
 
-    *SIO_GPIO_OUT_SET = (*SIO_GPIO_OUT_SET) | (1 << 25);
+    *SIO_GPIO_OUT_SET = (1 << 25); // LED ON  }
   }
   return 0;
 }
