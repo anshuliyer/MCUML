@@ -24,16 +24,18 @@ set(CMAKE_CXX_STANDARD 17)
 
 pico_sdk_init()
 
-# Build bl1 executable with USB CDC driver
+# Build bl1 executable with USB CDC driver and SysTick timer
 add_executable(bl1 
     bl1.c
     ../drivers/usb/usb.c
+    ../drivers/timer/systick.c
 )
 
 target_include_directories(bl1 PUBLIC 
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/../drivers/usb/hdrs
     ${CMAKE_CURRENT_LIST_DIR}/../drivers/usb
+    ${CMAKE_CURRENT_LIST_DIR}/../drivers/timer
 )
 
 target_link_libraries(bl1 
