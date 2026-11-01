@@ -24,8 +24,8 @@ UF2      ?= $(DEFAULT_POSTSIL_UF2)
 TIMEOUT  ?=
 SIM_ARGS ?=
 
-# Serial monitor parameters
-PORT ?= $(firstword $(wildcard /dev/cu.usbmodem*) /dev/cu.usbmodem11101)
+# Serial monitor parameters (auto-detect Linux ttyACM/ttyUSB/serial0 and macOS cu.usbmodem)
+PORT ?= $(firstword $(wildcard /dev/ttyACM*) $(wildcard /dev/ttyUSB*) $(wildcard /dev/serial0) $(wildcard /dev/cu.usbmodem*) /dev/ttyACM0)
 BAUD ?= 115200
 
 .PHONY: all presil postsil run-presil run-postsil monitor help
@@ -92,12 +92,25 @@ run-postsil:
 monitor:
 	@echo "Connecting to serial port $(PORT) at $(BAUD) baud..."
 	@if [ -z "$(PORT)" ] || [ ! -e "$(PORT)" ]; then \
-		echo "ERROR: No USB serial device detected at $(PORT)."; \
-		echo "Available ports: $$(ls /dev/cu.usbmodem* 2>/dev/null || echo 'none')"; \
+		echo "ERROR: No serial device detected at $(PORT)."; \
+		echo "Available ports: $$(ls /dev/ttyACM* /dev/ttyUSB* /dev/serial0 /dev/cu.usbmodem* 2>/dev/null || echo 'none')"; \
+		echo "Tip: Run 'dmesg -w' or 'lsusb' to verify physical connection."; \
 		exit 1; \
 	fi
-	@echo "Starting screen (Press Ctrl-A then K, then Y to exit)..."
-	screen $(PORT) $(BAUD)
+	@if which $(PYTHON) >/dev/null 2>&1 && $(PYTHON) -c "import serial.tools.miniterm" >/dev/null 2>&1; then \
+		echo "Starting miniterm (Press Ctrl-] to exit)..."; \
+		$(PYTHON) -m serial.tools.miniterm "$(PORT)" $(BAUD); \
+	elif which screen >/dev/null 2>&1; then \
+		echo "Starting screen (Press Ctrl-A then K, then Y to exit)..."; \
+		screen "$(PORT)" $(BAUD); \
+	elif which minicom >/dev/null 2>&1; then \
+		echo "Starting minicom (Press Ctrl-A then X to exit)..."; \
+		minicom -b $(BAUD) -o -D "$(PORT)"; \
+	else \
+		echo "Starting raw stream from $(PORT) (Press Ctrl-C to exit)..."; \
+		stty -F "$(PORT)" $(BAUD) raw -echo 2>/dev/null || true; \
+		cat "$(PORT)"; \
+	fi
 
 # ==============================================================================
 # Help
