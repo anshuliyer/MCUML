@@ -5,9 +5,14 @@
 
 ROOT_DIR ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
 
-.PHONY: all presil postsil run-presil run-postsil monitor clean help
+.PHONY: all deps presil postsil run-presil run-postsil monitor clean help
 
 all: presil postsil
+
+# Dependency management
+deps:
+	@bash $(ROOT_DIR)/model/firmware/drivers/usb/pull_dependencies.sh
+	@pip3 install -r $(ROOT_DIR)/tools/requirements.txt
 
 # Build targets
 presil:

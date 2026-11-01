@@ -3,9 +3,14 @@
 # Forwards commands to makefiles/build and makefiles/run.
 # ==============================================================================
 
-.PHONY: all presil postsil run-presil run-postsil monitor clean help
+.PHONY: all deps presil postsil run-presil run-postsil monitor clean help
 
 all: presil postsil
+
+# Pull and install all dependencies (Pico SDK submodules + Python packages)
+deps:
+	@bash $(CURDIR)/model/firmware/drivers/usb/pull_dependencies.sh
+	@pip3 install -r $(CURDIR)/tools/requirements.txt
 
 presil:
 	$(MAKE) -f makefiles/build presil $(MAKEOVERRIDES)
