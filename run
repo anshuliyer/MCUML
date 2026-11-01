@@ -1,0 +1,325 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# MCUML Unified Execution Runner (./run)
+#
+# Runs Pre-Silicon (QEMU simulation) and Post-Silicon (Pico hardware flashing).
+# Supports passing binary paths directly via the -b flag.
+#
+# Usage:
+#   ./run presil [-b <binary.elf>] [-t <timeout>] [-- <sim args>]
+#   ./run postsil [-b <binary.uf2>]
+#   ./run monitor [-p <port>] [-b <baud>]
+#   ./run help
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON="${PYTHON:-python3}"
+PICOTOOL="${PICOTOOL:-picotool}"
+
+show_help() {
+    cat << 'EOF'
+MCUML Execution Runner (./run)
+
+Usage:
+  ./run presil  [-b <binary.elf>] [-t <timeout>] [-- <sim_args>]
+  ./run postsil [-b <binary.uf2>]
+  ./run monitor [-p <port>] [-b <baud>]
+
+Commands:
+  presil   Launch QEMU simulation for Cortex-M0+ / Cortex-M
+           -b, --binary <path>   Path to ELF binary
+           -t, --timeout <sec>   Simulation timeout in seconds
+           -- <args>             Pass remaining arguments directly to QEMU
+
+  postsil  Flash binary to Raspberry Pi Pico (RP2040)
+           -b, --binary <path>   Path to UF2 or ELF binary
+
+  monitor  Open serial monitor (auto-detects USB CDC /dev/ttyACM*)
+           -p, --port <device>   Serial port device (default: auto-detected)
+           -b, --baud <rate>     Baud rate (default: 115200)
+
+Examples:
+  ./run presil -b build/presil/firmware.elf
+  ./run postsil -b model/firmware/drivers/usb/test_usb.uf2
+  ./run postsil -b build/postsil/firmware.uf2
+  ./run monitor
+EOF
+}
+
+# ==============================================================================
+# Subcommand: presil (QEMU Simulation)
+# ==============================================================================
+run_presil() {
+    local binary=""
+    local timeout=""
+    local sim_args=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -b|--binary|-k|--kernel)
+                binary="$2"
+                shift 2
+                ;;
+            -t|--timeout)
+                timeout="$2"
+                shift 2
+                ;;
+            --)
+                shift
+                sim_args+=("$@")
+                break
+                ;;
+            -h|--help)
+                echo "Usage: ./run presil [-b <binary.elf>] [-t <timeout>] [-- <sim_args>]"
+                return 0
+                ;;
+            *)
+                sim_args+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    # Auto-detect default if not specified
+    if [[ -z "$binary" ]]; then
+        local found
+        found=$(find "${SCRIPT_DIR}/build/presil" -name "*.elf" 2>/dev/null | head -n 1 || true)
+        if [[ -n "$found" ]]; then
+            binary="$found"
+        elif [[ -f "${SCRIPT_DIR}/tools/test_binary/firmware.elf" ]]; then
+            binary="${SCRIPT_DIR}/tools/test_binary/firmware.elf"
+        fi
+    fi
+
+    if [[ -z "$binary" || ! -f "$binary" ]]; then
+        echo "ERROR: Kernel ELF binary '$binary' not found."
+        echo "Specify a binary using: ./run presil -b <path/to/binary.elf>"
+        echo "Or build one via:       make presil"
+        exit 1
+    fi
+
+    echo "============================================================"
+    echo " [RUN] Pre-Silicon QEMU Simulation (Cortex-M0+)"
+    echo "============================================================"
+    echo "Binary:  $binary"
+    echo "Runner:  tools/sim/sim_connect.py"
+    echo ""
+
+    local cmd=("$PYTHON" "${SCRIPT_DIR}/tools/sim/sim_connect.py" --kernel "$binary")
+    if [[ -n "$timeout" ]]; then
+        cmd+=(--timeout "$timeout")
+    fi
+    if [[ ${#sim_args[@]} -gt 0 ]]; then
+        cmd+=("${sim_args[@]}")
+    fi
+
+    "${cmd[@]}" || [[ $? -eq 124 ]]
+}
+
+# ==============================================================================
+# Subcommand: postsil (Hardware Flash via picotool)
+# ==============================================================================
+run_postsil() {
+    local binary=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -b|--binary|-u|--uf2)
+                binary="$2"
+                shift 2
+                ;;
+            -h|--help)
+                echo "Usage: ./run postsil [-b <binary.uf2>]"
+                return 0
+                ;;
+            *)
+                echo "Unknown option: $1"
+                echo "Usage: ./run postsil [-b <binary.uf2>]"
+                exit 1
+                ;;
+        esac
+    done
+
+    # Auto-detect default if not specified
+    if [[ -z "$binary" ]]; then
+        if [[ -f "${SCRIPT_DIR}/model/firmware/drivers/usb/test_usb.uf2" ]]; then
+            binary="${SCRIPT_DIR}/model/firmware/drivers/usb/test_usb.uf2"
+        else
+            local found
+            found=$(find "${SCRIPT_DIR}/build/postsil" -name "*.uf2" 2>/dev/null | head -n 1 || true)
+            if [[ -n "$found" ]]; then
+                binary="$found"
+            fi
+        fi
+    fi
+
+    if [[ -z "$binary" || ! -f "$binary" ]]; then
+        echo "ERROR: Binary '$binary' not found."
+        echo "Specify a binary using: ./run postsil -b <path/to/binary.uf2>"
+        echo "Example:               ./run postsil -b model/firmware/drivers/usb/test_usb.uf2"
+        exit 1
+    fi
+
+    # If an ELF file was passed instead of UF2, convert it if picotool is present
+    if [[ "$binary" == *.elf ]]; then
+        local uf2_out="${binary%.elf}.uf2"
+        if which "$PICOTOOL" >/dev/null 2>&1; then
+            echo "Converting $binary to $uf2_out via picotool..."
+            "$PICOTOOL" uf2 convert "$binary" "$uf2_out" --family rp2040 >/dev/null 2>&1 || true
+            if [[ -f "$uf2_out" ]]; then
+                binary="$uf2_out"
+            fi
+        fi
+    fi
+
+    echo "============================================================"
+    echo " [RUN] Post-Silicon Hardware Flash (Raspberry Pi Pico)"
+    echo "============================================================"
+    echo "Binary:  $binary"
+    echo ""
+
+    if which "$PICOTOOL" >/dev/null 2>&1; then
+        echo "Flashing via picotool..."
+        local err_log
+        err_log=$(mktemp 2>/dev/null || echo "/tmp/picotool_err.log")
+        if ! "$PICOTOOL" load -x -f "$binary" 2>"$err_log"; then
+            local status=$?
+            if [[ $status -eq 157 ]]; then
+                # Picotool returns 157 after sending reboot command
+                :
+            else
+                cat "$err_log" 2>/dev/null || true
+                echo ""
+                echo "============================================================"
+                echo " [!] Pico Not Detected in BOOTSEL Mode"
+                echo "============================================================"
+                echo "If the currently running firmware halted or disabled USB,"
+                echo "picotool cannot reboot the device automatically."
+                echo ""
+                echo "To flash:"
+                echo "  1. Unplug the USB cable from the Pico."
+                echo "  2. Hold down the white BOOTSEL button on the Pico."
+                echo "  3. Plug the USB cable back in."
+                echo "  4. Release the BOOTSEL button."
+                echo "  5. Re-run: ./run postsil -b $binary"
+                echo "============================================================"
+                rm -f "$err_log"
+                exit 1
+            fi
+        fi
+        rm -f "$err_log"
+    elif [[ -d "/Volumes/RPI-RP2" ]]; then
+        echo "Copying to /Volumes/RPI-RP2..."
+        cp "$binary" /Volumes/RPI-RP2/
+    elif [[ -n "$(ls -d /media/*/RPI-RP2 2>/dev/null || true)" ]]; then
+        local target_mount
+        target_mount=$(ls -d /media/*/RPI-RP2 2>/dev/null | head -n 1)
+        echo "Copying to $target_mount..."
+        cp "$binary" "$target_mount/"
+    else
+        echo "ERROR: Pico not detected in BOOTSEL or serial mode."
+        echo "Hold BOOTSEL while plugging in USB to mount drive."
+        exit 1
+    fi
+
+    echo ""
+    echo "[SUCCESS] Post-Silicon binary loaded successfully."
+}
+
+# ==============================================================================
+# Subcommand: monitor (Serial Console)
+# ==============================================================================
+run_monitor() {
+    local port=""
+    local baud="115200"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -p|--port)
+                port="$2"
+                shift 2
+                ;;
+            -b|--baud)
+                baud="$2"
+                shift 2
+                ;;
+            -h|--help)
+                echo "Usage: ./run monitor [-p <port>] [-b <baud>]"
+                return 0
+                ;;
+            *)
+                echo "Unknown option: $1"
+                exit 1
+                ;;
+        esac
+    done
+
+    # Auto-detect serial port if not provided
+    if [[ -z "$port" ]]; then
+        for candidate in /dev/ttyACM* /dev/ttyUSB* /dev/serial0 /dev/cu.usbmodem*; do
+            if [[ -e "$candidate" ]]; then
+                port="$candidate"
+                break
+            fi
+        done
+        port="${port:-/dev/ttyACM0}"
+    fi
+
+    echo "Connecting to serial port $port at $baud baud..."
+    if [[ ! -e "$port" ]]; then
+        echo "ERROR: No serial device detected at $port."
+        local available
+        available=$(ls /dev/ttyACM* /dev/ttyUSB* /dev/serial0 /dev/cu.usbmodem* 2>/dev/null || echo "none")
+        echo "Available ports: $available"
+        echo "Tip: Run 'dmesg -w' or 'lsusb' to verify physical connection."
+        exit 1
+    fi
+
+    if which "$PYTHON" >/dev/null 2>&1 && "$PYTHON" -c "import serial.tools.miniterm" >/dev/null 2>&1; then
+        echo "Starting miniterm (Press Ctrl-] to exit)..."
+        "$PYTHON" -m serial.tools.miniterm "$port" "$baud"
+    elif which screen >/dev/null 2>&1; then
+        echo "Starting screen (Press Ctrl-A then K, then Y to exit)..."
+        screen "$port" "$baud"
+    elif which minicom >/dev/null 2>&1; then
+        echo "Starting minicom (Press Ctrl-A then X to exit)..."
+        minicom -b "$baud" -o -D "$port"
+    else
+        echo "Starting raw stream from $port (Press Ctrl-C to exit)..."
+        stty -F "$port" "$baud" raw -echo 2>/dev/null || true
+        cat "$port"
+    fi
+}
+
+# ==============================================================================
+# Entry Point
+# ==============================================================================
+if [[ $# -lt 1 ]]; then
+    show_help
+    exit 0
+fi
+
+subcmd="$1"
+shift
+
+case "$subcmd" in
+    presil)
+        run_presil "$@"
+        ;;
+    postsil)
+        run_postsil "$@"
+        ;;
+    monitor)
+        run_monitor "$@"
+        ;;
+    help|-h|--help)
+        show_help
+        ;;
+    *)
+        echo "Unknown command: '$subcmd'"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac

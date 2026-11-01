@@ -1,36 +1,39 @@
 # ==============================================================================
 # MCUML Top-Level Makefile
-# Forwards commands to makefiles/build and makefiles/run.
+# Pure build management: presil, postsil, deps, clean.
+# For running, use: ./run presil -b <binary> or ./run postsil -b <binary>
 # ==============================================================================
 
-.PHONY: all deps presil postsil run-presil run-postsil run-usb monitor clean help
+.PHONY: all deps presil postsil clean help
 
 all: presil postsil
 
-# Pull and install all dependencies (Pico SDK submodules + Python packages)
+# Pull external dependencies (Pico SDK submodules + Python packages)
 deps:
 	@bash $(CURDIR)/deps/pull_deps.sh
 
+# Compile Pre-Silicon (QEMU / Cortex-M0+)
 presil:
-	$(MAKE) -f makefiles/build presil $(MAKEOVERRIDES)
+	@$(MAKE) -f makefiles/build presil $(MAKEOVERRIDES)
 
+# Compile Post-Silicon (Pico RP2040)
 postsil:
-	$(MAKE) -f makefiles/build postsil $(MAKEOVERRIDES)
+	@$(MAKE) -f makefiles/build postsil $(MAKEOVERRIDES)
 
-run-presil:
-	$(MAKE) -f makefiles/run presil $(MAKEOVERRIDES)
-
-run-postsil:
-	$(MAKE) -f makefiles/run postsil $(MAKEOVERRIDES)
-
-run-usb:
-	$(MAKE) -f makefiles/run run-usb $(MAKEOVERRIDES)
-
-monitor:
-	$(MAKE) -f makefiles/run monitor $(MAKEOVERRIDES)
-
+# Remove build artifacts
 clean:
-	$(MAKE) -f makefiles/build clean
+	@$(MAKE) -f makefiles/build clean
 
 help:
-	@$(MAKE) -f makefiles/build help
+	@echo "MCUML Build System"
+	@echo ""
+	@echo "Build Targets:"
+	@echo "  make deps      - Install SDK and Python requirements"
+	@echo "  make presil    - Build Pre-Silicon ELF binary"
+	@echo "  make postsil   - Build Post-Silicon UF2 binary"
+	@echo "  make clean     - Clean build artifacts"
+	@echo ""
+	@echo "Run Commands (use ./run with -b flag):"
+	@echo "  ./run presil -b <path/to/binary.elf>"
+	@echo "  ./run postsil -b <path/to/binary.uf2>"
+	@echo "  ./run monitor"

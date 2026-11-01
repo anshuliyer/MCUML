@@ -4,6 +4,7 @@ build/
 *.elf
 *.bin
 *.uf2
+!model/firmware/drivers/usb/test_usb.uf2
 deps/pico-sdk/
 .venv/
 venv/
