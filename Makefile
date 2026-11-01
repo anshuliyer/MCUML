@@ -14,15 +14,15 @@ deps:
 
 # Compile Pre-Silicon (QEMU / Cortex-M0+)
 presil:
-	@$(MAKE) -f makefiles/build presil $(MAKEOVERRIDES)
+	@./build presil
 
 # Compile Post-Silicon (Pico RP2040)
 postsil:
-	@$(MAKE) -f makefiles/build postsil $(MAKEOVERRIDES)
+	@./build postsil
 
 # Remove build artifacts
 clean:
-	@$(MAKE) -f makefiles/build clean
+	@./build clean
 
 help:
 	@echo "MCUML Build System"

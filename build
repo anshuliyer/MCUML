@@ -1,0 +1,343 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# MCUML Unified Build System (./build)
+#
+# Compiles firmware for Pre-Silicon (QEMU simulation) and Post-Silicon (RP2040).
+# Allows passing C source files, headers, custom linker scripts, and startup files.
+# Automatically generates Pico-flashable UF2 binaries for Post-Silicon.
+#
+# Usage:
+#   ./build presil  [-s <sources...>] [-i <headers...>] [-o <target>] [-T <linker.ld>] [-S <startup>]
+#   ./build postsil [-s <sources...>] [-i <headers...>] [-o <target>] [-T <linker.ld>] [-S <startup>]
+#   ./build clean
+#   ./build help
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON="${PYTHON:-python3}"
+PICOTOOL="${PICOTOOL:-picotool}"
+
+# ==============================================================================
+# Toolchain Detection
+# ==============================================================================
+if which arm-none-eabi-gcc >/dev/null 2>&1; then
+    CC="arm-none-eabi-gcc"
+    OBJCOPY="arm-none-eabi-objcopy"
+    SIZE="arm-none-eabi-size"
+else
+    toolchain_bin=$(ls -d /Applications/ArmGNUToolchain/*/arm-none-eabi/bin 2>/dev/null | head -n 1 || true)
+    if [[ -n "$toolchain_bin" && -x "$toolchain_bin/arm-none-eabi-gcc" ]]; then
+        CC="$toolchain_bin/arm-none-eabi-gcc"
+        OBJCOPY="$toolchain_bin/arm-none-eabi-objcopy"
+        SIZE="$toolchain_bin/arm-none-eabi-size"
+    else
+        echo "ERROR: arm-none-eabi-gcc cross-compiler not found in PATH."
+        echo "Please install the ARM GNU Toolchain:"
+        echo "  macOS:       brew install arm-none-eabi-gcc"
+        echo "  Debian/RPi:  sudo apt install gcc-arm-none-eabi binutils-arm-none-eabi"
+        exit 1
+    fi
+fi
+
+# ==============================================================================
+# Help Display
+# ==============================================================================
+show_help() {
+    cat << 'EOF'
+MCUML Unified Build System (./build)
+
+Usage:
+  ./build presil  [options]
+  ./build postsil [options]
+  ./build clean
+  ./build help
+
+Options:
+  -s, --src, -c <file...>       C or assembly source files (can pass multiple)
+  -i, -I, --inc, --headers <dir> Include directory / header path (can pass multiple)
+  -T, -l, --linker <file.ld>    Custom linker script (default: model/firmware/linker/linker.ld)
+  -S, --startup, --s <file>     Custom startup file (default: model/firmware/startup/startup.c)
+  -o, --output, --target <name> Output binary name (default: firmware)
+  -d, --outdir <dir>            Output root directory (default: out/)
+  --cflags <flags>              Additional compiler flags
+
+Examples:
+  # Default builds
+  ./build presil
+  ./build postsil
+
+  # Compile custom C files and header directories
+  ./build presil -s my_test.c model/firmware/drivers/uart/uart.c -i model/firmware/drivers/uart/hdr -o my_test
+  ./build postsil -s app.c -i include/ -T custom.ld -o app
+
+  # Clean build artifacts
+  ./build clean
+EOF
+}
+
+# ==============================================================================
+# Convert BIN to RP2040 UF2 using Pure Python (Fallback if picotool not found)
+# ==============================================================================
+convert_bin_to_uf2_python() {
+    local bin_file="$1"
+    local uf2_file="$2"
+
+    "$PYTHON" -c '
+import struct, sys
+
+bin_path = sys.argv[1]
+uf2_path = sys.argv[2]
+
+with open(bin_path, "rb") as f:
+    data = f.read()
+
+num_blocks = (len(data) + 255) // 256
+with open(uf2_path, "wb") as f:
+    for block_no in range(num_blocks):
+        chunk = data[block_no * 256 : (block_no + 1) * 256]
+        payload = chunk.ljust(256, b"\x00")
+        padding = b"\x00" * (476 - 256)
+        # UF2 Header: magic0, magic1, flags (0x2000), target_addr, payload_size (256), block_no, num_blocks, family_id (0xe48ff56a)
+        header = struct.pack(
+            "<IIIIIIII",
+            0x0A324655,
+            0x9E5D5157,
+            0x00002000,
+            0x10000000 + block_no * 256,
+            256,
+            block_no,
+            num_blocks,
+            0xe48ff56a,
+        )
+        footer = struct.pack("<I", 0x0AB16F30)
+        f.write(header + payload + padding + footer)
+' "$bin_file" "$uf2_file"
+}
+
+# ==============================================================================
+# Core Build Function
+# ==============================================================================
+run_build() {
+    local mode="$1"
+    shift
+
+    local sources=()
+    local includes=()
+    local linker=""
+    local startup=""
+    local target="firmware"
+    local out_base="${SCRIPT_DIR}/out"
+    local extra_cflags=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -s|--src|--sources|-c)
+                shift
+                while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
+                    sources+=("$1")
+                    shift
+                done
+                ;;
+            -i|--inc|--include|--headers)
+                includes+=("-I" "$2")
+                shift 2
+                ;;
+            -I*)
+                includes+=("$1")
+                shift
+                ;;
+            -T|-l|--linker)
+                linker="$2"
+                shift 2
+                ;;
+            -S|--startup|--s)
+                startup="$2"
+                shift 2
+                ;;
+            -o|--output|--target)
+                target="$2"
+                shift 2
+                ;;
+            -d|--outdir)
+                out_base="$2"
+                shift 2
+                ;;
+            --cflags)
+                extra_cflags+=("$2")
+                shift 2
+                ;;
+            -h|--help)
+                show_help
+                return 0
+                ;;
+            *.c|*.s|*.S)
+                sources+=("$1")
+                shift
+                ;;
+            *)
+                echo "Unknown option: $1"
+                echo "Run './build help' for usage."
+                exit 1
+                ;;
+        esac
+    done
+
+    # Default Linker
+    if [[ -z "$linker" ]]; then
+        linker="${SCRIPT_DIR}/model/firmware/linker/linker.ld"
+    fi
+
+    # Default Startup
+    if [[ -z "$startup" ]]; then
+        startup="${SCRIPT_DIR}/model/firmware/startup/startup.c"
+    fi
+
+    # Default Sources
+    if [[ ${#sources[@]} -eq 0 ]]; then
+        sources=(
+            "${SCRIPT_DIR}/model/firmware/drivers/uart/test_uart.c"
+            "${SCRIPT_DIR}/model/firmware/drivers/uart/uart.c"
+        )
+    fi
+
+    # Default Includes
+    if [[ ${#includes[@]} -eq 0 ]]; then
+        includes=("-I" "${SCRIPT_DIR}/model/firmware/drivers/uart/hdr")
+    fi
+
+    # Verify input files exist
+    if [[ ! -f "$linker" ]]; then
+        echo "ERROR: Linker script '$linker' not found."
+        exit 1
+    fi
+    if [[ ! -f "$startup" ]]; then
+        echo "ERROR: Startup file '$startup' not found."
+        exit 1
+    fi
+    for src in "${sources[@]}"; do
+        if [[ ! -f "$src" ]]; then
+            echo "ERROR: Source file '$src' not found."
+            exit 1
+        fi
+    done
+
+    local out_dir="${out_base}/${mode}"
+    mkdir -p "$out_dir"
+
+    # Architecture flags: Cortex-M0+ (RP2040 / ARMv6-M)
+    local cpu_flags=(-mcpu=cortex-m0plus -mthumb)
+    local cflags=(
+        "${cpu_flags[@]}"
+        -ffreestanding
+        -nostdlib
+        -Wall
+        -Wextra
+        -O2
+    )
+
+    local mode_banner=""
+    if [[ "$mode" == "presil" ]]; then
+        mode_banner="Pre-Silicon (Cortex-M0+ / QEMU Simulation)"
+        cflags+=("-DPRESIL")
+    else
+        mode_banner="Post-Silicon (Raspberry Pi Pico / RP2040 Flashable)"
+        cflags+=("-DPOSTSIL")
+    fi
+
+    if [[ ${#extra_cflags[@]} -gt 0 ]]; then
+        cflags+=("${extra_cflags[@]}")
+    fi
+
+    local elf_out="${out_dir}/${target}.elf"
+    local bin_out="${out_dir}/${target}.bin"
+    local uf2_out="${out_dir}/${target}.uf2"
+
+    echo "============================================================"
+    echo " [BUILD] ${mode_banner}"
+    echo "============================================================"
+    echo "Target:  $target"
+    echo "Sources: ${sources[*]}"
+    echo "Headers: ${includes[*]}"
+    echo "Startup: $startup"
+    echo "Linker:  $linker"
+    echo "Out dir: $out_dir"
+    echo ""
+
+    # 1. Compile and Link ELF
+    "$CC" "${cflags[@]}" "${includes[@]}" \
+        -T "$linker" \
+        "$startup" \
+        "${sources[@]}" \
+        -o "$elf_out"
+
+    # 2. Extract Raw Binary
+    "$OBJCOPY" -O binary "$elf_out" "$bin_out"
+
+    # 3. For Post-Silicon, generate Pico-flashable UF2
+    if [[ "$mode" == "postsil" ]]; then
+        if which "$PICOTOOL" >/dev/null 2>&1; then
+            "$PICOTOOL" uf2 convert "$elf_out" "$uf2_out" --family rp2040 >/dev/null 2>&1 || true
+        fi
+        # Fallback to python converter if picotool is absent or did not create the file
+        if [[ ! -f "$uf2_out" ]]; then
+            convert_bin_to_uf2_python "$bin_out" "$uf2_out"
+        fi
+    fi
+
+    echo "Generated:"
+    echo "  ELF: $elf_out"
+    echo "  BIN: $bin_out"
+    if [[ "$mode" == "postsil" && -f "$uf2_out" ]]; then
+        echo "  UF2: $uf2_out (Pico Flashable)"
+    fi
+
+    if which "$SIZE" >/dev/null 2>&1; then
+        echo ""
+        "$SIZE" "$elf_out"
+    fi
+
+    echo ""
+    echo "[SUCCESS] Build complete: $mode"
+}
+
+# ==============================================================================
+# Clean
+# ==============================================================================
+clean_build() {
+    echo "Cleaning build artifacts..."
+    rm -rf "${SCRIPT_DIR}/out"
+    echo "Done."
+}
+
+# ==============================================================================
+# Entry Point
+# ==============================================================================
+if [[ $# -lt 1 ]]; then
+    show_help
+    exit 0
+fi
+
+subcmd="$1"
+shift
+
+case "$subcmd" in
+    presil)
+        run_build "presil" "$@"
+        ;;
+    postsil)
+        run_build "postsil" "$@"
+        ;;
+    clean)
+        clean_build
+        ;;
+    help|-h|--help)
+        show_help
+        ;;
+    *)
+        echo "Unknown command: '$subcmd'"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac

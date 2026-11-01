@@ -84,7 +84,7 @@ run_presil() {
     # Auto-detect default if not specified
     if [[ -z "$binary" ]]; then
         local found
-        found=$(find "${SCRIPT_DIR}/build/presil" -name "*.elf" 2>/dev/null | head -n 1 || true)
+        found=$(find "${SCRIPT_DIR}/out/presil" "${SCRIPT_DIR}/build/presil" -name "*.elf" 2>/dev/null | head -n 1 || true)
         if [[ -n "$found" ]]; then
             binary="$found"
         elif [[ -f "${SCRIPT_DIR}/tools/test_binary/firmware.elf" ]]; then
@@ -95,7 +95,7 @@ run_presil() {
     if [[ -z "$binary" || ! -f "$binary" ]]; then
         echo "ERROR: Kernel ELF binary '$binary' not found."
         echo "Specify a binary using: ./run presil -b <path/to/binary.elf>"
-        echo "Or build one via:       make presil"
+        echo "Or build one via:       ./build presil"
         exit 1
     fi
 
@@ -147,7 +147,7 @@ run_postsil() {
             binary="${SCRIPT_DIR}/model/firmware/drivers/usb/test_usb.uf2"
         else
             local found
-            found=$(find "${SCRIPT_DIR}/build/postsil" -name "*.uf2" 2>/dev/null | head -n 1 || true)
+            found=$(find "${SCRIPT_DIR}/out/postsil" "${SCRIPT_DIR}/build/postsil" -name "*.uf2" 2>/dev/null | head -n 1 || true)
             if [[ -n "$found" ]]; then
                 binary="$found"
             fi
