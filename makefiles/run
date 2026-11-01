@@ -1,0 +1,119 @@
+# ==============================================================================
+# MCUML Execution / Run Makefile (makefiles/run)
+# Runs Pre-Silicon (QEMU simulation) and Post-Silicon (Pico flash & monitor).
+#
+# Usage:
+#   make -f makefiles/run presil [KERNEL="..."] [TIMEOUT="..."] [SIM_ARGS="..."]
+#   make -f makefiles/run postsil [UF2="..."]
+#   make -f makefiles/run monitor [PORT="..."] [BAUD="..."]
+# ==============================================================================
+
+ROOT_DIR ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
+BUILD_DIR ?= $(ROOT_DIR)/build
+
+PYTHON   ?= python3
+PICOTOOL ?= picotool
+
+# Auto-detect default binaries
+TARGET ?= firmware
+DEFAULT_PRESIL_ELF := $(firstword $(wildcard $(BUILD_DIR)/presil/*.elf) $(ROOT_DIR)/tools/test_binary/firmware.elf)
+DEFAULT_POSTSIL_UF2 := $(firstword $(wildcard $(BUILD_DIR)/postsil/*.uf2) $(ROOT_DIR)/test_usb.uf2)
+
+KERNEL   ?= $(DEFAULT_PRESIL_ELF)
+UF2      ?= $(DEFAULT_POSTSIL_UF2)
+TIMEOUT  ?=
+SIM_ARGS ?=
+
+# Serial monitor parameters
+PORT ?= $(firstword $(wildcard /dev/cu.usbmodem*) /dev/cu.usbmodem11101)
+BAUD ?= 115200
+
+.PHONY: all presil postsil run-presil run-postsil monitor help
+
+all: presil
+
+# ==============================================================================
+# Pre-Silicon Run Target (QEMU Simulator)
+# ==============================================================================
+presil: run-presil
+run-presil:
+	@echo "============================================================"
+	@echo " [RUN] Pre-Silicon QEMU Simulation (Cortex-M0+)"
+	@echo "============================================================"
+	@if [ ! -f "$(KERNEL)" ]; then \
+		echo "ERROR: Kernel binary '$(KERNEL)' not found."; \
+		echo "Please build first via: make -f makefiles/build presil"; \
+		exit 1; \
+	fi
+	@echo "Kernel:   $(KERNEL)"
+	@echo "Runner:   tools/sim/sim_connect.py"
+	@echo ""
+	@$(PYTHON) $(ROOT_DIR)/tools/sim/sim_connect.py \
+		--kernel "$(KERNEL)" \
+		$(if $(TIMEOUT),--timeout $(TIMEOUT),) \
+		$(SIM_ARGS) || [ $$? -eq 124 ]
+
+# ==============================================================================
+# Post-Silicon Run Target (Flash & Reboot Raspberry Pi Pico)
+# ==============================================================================
+postsil: run-postsil
+run-postsil:
+	@echo "============================================================"
+	@echo " [RUN] Post-Silicon Hardware Flash (Raspberry Pi Pico)"
+	@echo "============================================================"
+	@if [ ! -f "$(UF2)" ]; then \
+		echo "ERROR: UF2 binary '$(UF2)' not found."; \
+		echo "Please build first via: make -f makefiles/build postsil"; \
+		exit 1; \
+	fi
+	@echo "Binary:   $(UF2)"
+	@echo ""
+	@if which $(PICOTOOL) >/dev/null 2>&1; then \
+		echo "Flashing via picotool..."; \
+		$(PICOTOOL) load "$(UF2)" -f && $(PICOTOOL) reboot; \
+	elif [ -d "/Volumes/RPI-RP2" ]; then \
+		echo "Copying to /Volumes/RPI-RP2..."; \
+		cp "$(UF2)" /Volumes/RPI-RP2/; \
+	else \
+		echo "ERROR: Pico not detected in BOOTSEL or serial mode."; \
+		echo "Hold BOOTSEL while plugging in USB, or run: picotool reboot -f -u"; \
+		exit 1; \
+	fi
+	@echo ""
+	@echo "[SUCCESS] Post-Silicon binary loaded successfully."
+
+# ==============================================================================
+# Monitor Serial Console
+# ==============================================================================
+monitor:
+	@echo "Connecting to serial port $(PORT) at $(BAUD) baud..."
+	@if [ -z "$(PORT)" ] || [ ! -e "$(PORT)" ]; then \
+		echo "ERROR: No USB serial device detected at $(PORT)."; \
+		echo "Available ports: $$(ls /dev/cu.usbmodem* 2>/dev/null || echo 'none')"; \
+		exit 1; \
+	fi
+	@echo "Starting screen (Press Ctrl-A then K, then Y to exit)..."
+	screen $(PORT) $(BAUD)
+
+# ==============================================================================
+# Help
+# ==============================================================================
+help:
+	@echo "MCUML Run / Execution System"
+	@echo "Targets:"
+	@echo "  presil   - Launch QEMU simulation for Cortex-M33"
+	@echo "  postsil  - Flash binary to Raspberry Pi Pico (RP2040)"
+	@echo "  monitor  - Connect to USB serial port (screen)"
+	@echo ""
+	@echo "Variables:"
+	@echo "  KERNEL   - Path to ELF binary for QEMU (default: build/presil/*.elf)"
+	@echo "  UF2      - Path to UF2 binary for Pico (default: build/postsil/*.uf2)"
+	@echo "  TIMEOUT  - Simulation timeout in seconds (optional)"
+	@echo "  PORT     - Serial port (default: auto-detected /dev/cu.usbmodem*)"
+	@echo "  BAUD     - Baud rate (default: 115200)"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make -f makefiles/run presil"
+	@echo "  make -f makefiles/run presil KERNEL=build/presil/test_uart.elf TIMEOUT=5"
+	@echo "  make -f makefiles/run postsil UF2=build/postsil/test_usb.uf2"
+	@echo "  make -f makefiles/run monitor"

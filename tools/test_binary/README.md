@@ -1,6 +1,6 @@
 # Prebuilt Test Binary (`tools/test_binary`)
 
-Precompiled bare-metal ARM Cortex-M33 firmware for QEMU (`mps2-an505`). Outputs `"Test Binary For Sim"` over UART upon reset.
+Precompiled bare-metal ARM Cortex-M0+ (ARMv6-M) firmware for QEMU simulation. Outputs `"Test Binary For Sim"` over UART upon reset.
 
 ## Files
 - **`firmware.elf`**: ELF executable with debug symbols (for QEMU & GDB).

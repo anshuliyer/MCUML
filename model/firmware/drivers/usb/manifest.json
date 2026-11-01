@@ -1,0 +1,21 @@
+{
+  "manifest_version": "1.0",
+  "project": "MCUML USB Driver",
+  "target_hardware": "Raspberry Pi Pico (RP2040 / Cortex-M0+)",
+  "dependencies": [
+    {
+      "name": "pico-sdk",
+      "repository": "https://github.com/raspberrypi/pico-sdk.git",
+      "version": "2.1.0",
+      "install_path": "deps/pico-sdk",
+      "submodules": [
+        {
+          "name": "tinyusb",
+          "path": "lib/tinyusb",
+          "repository": "https://github.com/hathach/tinyusb.git"
+        }
+      ],
+      "description": "Raspberry Pi Pico official SDK providing RP2040 boot2, clock initialization, and USB CDC (TinyUSB) stack"
+    }
+  ]
+}

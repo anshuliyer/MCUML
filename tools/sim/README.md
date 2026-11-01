@@ -1,9 +1,9 @@
 # Simulation Tools (`tools/sim`)
 
-Cortex-M33 simulation, UART streaming, and GDB debugging for QEMU (`mps2-an505`).
+Cortex-M0+ simulation, UART streaming, and GDB debugging for QEMU.
 
 ## Modules
-- **`sim_connect.py`**: QEMU runner targeting Cortex-M33. Flashes binaries via `--kernel` and exposes all native QEMU flags. Supports `--h`.
+- **`sim_connect.py`**: QEMU runner targeting Cortex-M0+ / Cortex-M. Flashes binaries via `--kernel` and exposes all native QEMU flags. Supports `--h`.
 - **`uart.py`**: Bi-directional UART client/server over TCP, UNIX socket, or serial TTY with pattern matching (`--expect`). Supports `--h`.
 - **`debug.py`**: GDB wrapper (interactive/batch) to inspect registers (`--read-regs`) and dump memory (`--read-mem`). Supports `--h`.
 

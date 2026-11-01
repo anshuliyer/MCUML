@@ -1,7 +1,7 @@
 """MCUML Simulation Tools package.
 
 Modules:
-- sim_connect: QEMU simulation manager and wrapper targeting ARM Cortex-M33.
+- sim_connect: QEMU simulation manager and wrapper targeting ARM Cortex-M0+ / Cortex-M.
 - uart: UART streaming, logging, and interaction module.
 - debug: GDB debugging and automation module.
 """

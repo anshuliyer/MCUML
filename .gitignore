@@ -1,0 +1,7 @@
+.DS_Store
+build/
+*.o
+*.elf
+*.bin
+*.uf2
+deps/pico-sdk/

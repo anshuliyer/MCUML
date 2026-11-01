@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """MCUML Simulation Connector (sim_connect.py).
 
-QEMU Python Wrapper for ARM Cortex-M33 Simulation.
+QEMU Python Wrapper for ARM Cortex-M0+ / Cortex-M Simulation.
 
 Features:
-- Launches and manages QEMU simulation targeting Cortex-M33 core.
+- Launches and manages QEMU simulation targeting Cortex-M0+ / Cortex-M cores.
 - Accepts firmware/kernel binaries via --kernel / -kernel.
 - Exposes all native QEMU flags (passthrough of any extra flags).
 - Supports -h, --h, and --help for command-line help.
@@ -29,7 +29,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 
 class QemuSimulator:
-    """Wrapper and manager for QEMU Cortex-M33 simulation instances."""
+    """Wrapper and manager for QEMU Cortex-M simulation instances."""
 
     DEFAULT_MACHINE = "mps2-an505"
     DEFAULT_CPU = "cortex-m33"
