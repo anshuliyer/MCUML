@@ -17,7 +17,7 @@ PICOTOOL ?= picotool
 # Auto-detect default binaries
 TARGET ?= firmware
 DEFAULT_PRESIL_ELF := $(firstword $(wildcard $(BUILD_DIR)/presil/*.elf) $(ROOT_DIR)/tools/test_binary/firmware.elf)
-DEFAULT_POSTSIL_UF2 := $(firstword $(wildcard $(BUILD_DIR)/postsil/*.uf2) $(ROOT_DIR)/test_usb.uf2)
+DEFAULT_POSTSIL_UF2 := $(firstword $(wildcard $(BUILD_DIR)/postsil/*.uf2) $(BUILD_DIR)/postsil/$(TARGET).uf2)
 
 KERNEL   ?= $(DEFAULT_PRESIL_ELF)
 UF2      ?= $(DEFAULT_POSTSIL_UF2)
@@ -70,10 +70,14 @@ run-postsil:
 	@echo ""
 	@if which $(PICOTOOL) >/dev/null 2>&1; then \
 		echo "Flashing via picotool..."; \
-		$(PICOTOOL) load "$(UF2)" -f && $(PICOTOOL) reboot; \
+		$(PICOTOOL) load -x -f "$(UF2)" || [ $$? -eq 157 ]; \
 	elif [ -d "/Volumes/RPI-RP2" ]; then \
 		echo "Copying to /Volumes/RPI-RP2..."; \
 		cp "$(UF2)" /Volumes/RPI-RP2/; \
+	elif [ -n "$$(ls -d /media/*/RPI-RP2 2>/dev/null)" ]; then \
+		target_mount=$$(ls -d /media/*/RPI-RP2 2>/dev/null | head -n 1); \
+		echo "Copying to $$target_mount..."; \
+		cp "$(UF2)" "$$target_mount/"; \
 	else \
 		echo "ERROR: Pico not detected in BOOTSEL or serial mode."; \
 		echo "Hold BOOTSEL while plugging in USB, or run: picotool reboot -f -u"; \
