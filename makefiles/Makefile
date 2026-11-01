@@ -11,8 +11,7 @@ all: presil postsil
 
 # Dependency management
 deps:
-	@bash $(ROOT_DIR)/model/firmware/drivers/usb/pull_dependencies.sh
-	@pip3 install -r $(ROOT_DIR)/tools/requirements.txt
+	@bash $(ROOT_DIR)/deps/pull_deps.sh
 
 # Build targets
 presil:

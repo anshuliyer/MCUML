@@ -5,3 +5,5 @@ build/
 *.bin
 *.uf2
 deps/pico-sdk/
+.venv/
+venv/

@@ -9,8 +9,7 @@ all: presil postsil
 
 # Pull and install all dependencies (Pico SDK submodules + Python packages)
 deps:
-	@bash $(CURDIR)/model/firmware/drivers/usb/pull_dependencies.sh
-	@pip3 install -r $(CURDIR)/tools/requirements.txt
+	@bash $(CURDIR)/deps/pull_deps.sh
 
 presil:
 	$(MAKE) -f makefiles/build presil $(MAKEOVERRIDES)
