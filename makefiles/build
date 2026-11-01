@@ -13,28 +13,27 @@
 ROOT_DIR ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
 BUILD_DIR ?= $(ROOT_DIR)/build
 
-# Toolchain configuration
+# Toolchain configuration (cross-compilation for ARM Cortex-M0+)
 ARM_TOOLCHAIN_DIR := $(firstword $(wildcard /Applications/ArmGNUToolchain/*/arm-none-eabi/bin))
 ifneq ($(ARM_TOOLCHAIN_DIR),)
-    CC      := $(ARM_TOOLCHAIN_DIR)/arm-none-eabi-gcc
-    CXX     := $(ARM_TOOLCHAIN_DIR)/arm-none-eabi-g++
-    OBJCOPY := $(ARM_TOOLCHAIN_DIR)/arm-none-eabi-objcopy
-    SIZE    := $(ARM_TOOLCHAIN_DIR)/arm-none-eabi-size
-    export PATH := $(ARM_TOOLCHAIN_DIR):$(PATH)
+    CROSS_COMPILE ?= $(ARM_TOOLCHAIN_DIR)/arm-none-eabi-
+    export PATH   := $(ARM_TOOLCHAIN_DIR):$(PATH)
 else
-    ifeq ($(origin CC),default)
-        CC := arm-none-eabi-gcc
-    endif
-    ifeq ($(origin CXX),default)
-        CXX := arm-none-eabi-g++
-    endif
-    ifeq ($(origin OBJCOPY),default)
-        OBJCOPY := arm-none-eabi-objcopy
-    endif
-    ifeq ($(origin SIZE),default)
-        SIZE := arm-none-eabi-size
-    endif
+    CROSS_COMPILE ?= arm-none-eabi-
 endif
+
+ifeq ($(origin CC),default)
+    CC := $(CROSS_COMPILE)gcc
+endif
+ifeq ($(origin CXX),default)
+    CXX := $(CROSS_COMPILE)g++
+endif
+
+CC      ?= $(CROSS_COMPILE)gcc
+CXX     ?= $(CROSS_COMPILE)g++
+OBJCOPY ?= $(CROSS_COMPILE)objcopy
+OBJDUMP ?= $(CROSS_COMPILE)objdump
+SIZE    ?= $(CROSS_COMPILE)size
 
 PICOTOOL ?= picotool
 
